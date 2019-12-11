@@ -12,42 +12,77 @@ TRANSFER_NAME = "image"
 REQUEST_IMAGE_INFO = "request_image_info"
 REQUEST_IMAGE = "request_image"
 
+REQUEST_STR = "giveme"
+READY_COMPLETE = "ready_client"
+is_image_request = False
+
 is_image_transfer = False
 is_image_size_transfer = False
 
+to_taken_image_size = 0
 key = 4
-
+global_image_path = "siba.jpg"
+# path = "maxresdefault.jpg"
 
 def send(sock):
     while True:
         sendData = input()
+
+
+
+        global  global_image_path
+        if sendData == "image1":
+            global_image_path = "siba.jpg"
+        elif sendData == "image2":
+            global_image_path = "maxresdefault.jpg"
+        else:
+            pass
+
+
+
         # sendData += "\0"
         # print(sendData)
         # sock.sendall(encrypt(sendData.encode()))
         # sock.send(sendDat.encode(''))
         # sock.send(encrypt(sendData.encode('utf-8')))
-        sock.send(sendData.encode('unicode_escape'))
-        if sendData == TRANSFER_NAME:
+        global is_image_request
+        if sendData[:5] == TRANSFER_NAME:
             global is_image_transfer
             is_image_transfer = True
+            print("imgae transfer set TRUE")
+            sock.send(TRANSFER_NAME.encode('unicode_escape'))
+        elif sendData == REQUEST_STR:
+            sock.send(REQUEST_STR.encode('unicode_escape'))
+            is_image_request = True
+        else:
+            sock.send(sendData.encode('unicode_escape'))
+
+
         # sock.send(sendData.encode('utf-8'))
 
 
 def receive(sock):
     while True:
-        recvData = sock.recv(1024)
-        # print('상대방 :', decrypt(recvData).decode())
-        # try:
-            # print('상대방 :', recvData.decode('utf-8'))
-        # try:
-            # print(recvData)
-        print('상대방 :', recvData.decode('unicode_escape'))
         global is_image_transfer
+        global is_image_size_transfer
+        global is_image_request
+        global to_taken_image_size
+        global is_image_transfer
+        # while True:
+        print("받을 이미지 사이즈", to_taken_image_size, "image 요청 상태", is_image_request,
+              "image transfoer상태", is_image_size_transfer)
+        if is_image_request is True and to_taken_image_size > 0:
+            recvData = sock.recv(to_taken_image_size)
+            print("image buffer 받음요")
+        else:
+            recvData = sock.recv(1024)
+            print('상대방 :', recvData.decode('unicode_escape'))
 
-        decode_str = recvData.decode('unicode_escape')
-        # print(decode_str.encode())
-        # print()
-        strip_decode_str = decode_str.rstrip('\x00')
+
+            decode_str = recvData.decode('unicode_escape')
+            # print(decode_str.encode())
+            # print()
+            strip_decode_str = decode_str.rstrip('\x00')
         # print("---->", strip_decode_str, len(strip_decode_str))
         # print(type(decode_str), len(decode_str), len(SHOT_NAME))
         # strip_str = re.sub(r"\s+", "", decode_str)
@@ -58,11 +93,12 @@ def receive(sock):
         # >> > text.rstrip('\x00')
         # REQUEST_IMAGE_INFO = "request_image_info"
         # REQUEST_IMAGE = "request_image"
-        global is_image_transfer
-        path = "siba.jpg"
-        path = "maxresdefault.jpg"
-        if is_image_transfer:
+
+        path = global_image_path
+        if is_image_transfer is True:
+            print("is_image_transfer")
             if strip_decode_str == REQUEST_IMAGE_INFO:
+
                 # image_size = "122323"
                 mystat = os.stat(path)
 
@@ -74,36 +110,60 @@ def receive(sock):
 
                 with open(path, "rb") as f:
                     data = f.read()
-                # np_data = np.frombuffer(np.array(data), np.uint8)
-
-
-                # print(len(data), len(np_data.tobytes()))
-
-                # image = img_np = cv2.imdecode(np_data, cv2.IMREAD_UNCHANGED)
-                # cv2.imshow("", image)
-                # cv2.waitKey()
-
                 sock.send(data)
-
-                # sock.send("shotted image".encode('unicode_escape'))
                 is_image_size_transfer = False
+
             else:
+                print("뭐지",  strip_decode_str)
+                if is_image_request is True:
+                    if to_taken_image_size == 0:
+                        try:
+                            to_taken_image_size = int(strip_decode_str)
+                        except:
+                            print("faileed....", strip_decode_str)
+                        print("전달 받을 이미지 사이즈", to_taken_image_size)
+                        sock.send(READY_COMPLETE.encode('unicode_escape'))
+                    else:
+                        np_buffer = np.frombuffer(recvData, dtype=np.uint8)
+                        decodeimage = cv2.imdecode(np_buffer, cv2.IMREAD_UNCHANGED)
+                        cv2.imshow("", decodeimage)
+                        cv2.waitKey()
+                        is_image_request = False
+                        to_taken_image_size = 0
+
                 pass
             # 쏜 이후 상태 바꾼다
+        elif is_image_request is True:
+            print("is_image_request")
+            if to_taken_image_size == 0:
+                try:
+                    to_taken_image_size = int(strip_decode_str)
+                except:
+                    print("faileed....", strip_decode_str)
+                print("전달 받을 이미지 사이즈", to_taken_image_size)
+                sock.send(READY_COMPLETE.encode('unicode_escape'))
+            else:
+                np_buffer = np.frombuffer(recvData, dtype=np.uint8)
+                decodeimage = cv2.imdecode(np_buffer, cv2.IMREAD_UNCHANGED)
+                cv2.imshow("", decodeimage)
+                cv2.waitKey()
+                is_image_request = False
+                to_taken_image_size = 0
 
         else:
+            print("recv..===else---")
             print(strip_decode_str)
 
-            # decode('unicode_escape').encode('utf-8')
-        # except:
-        #     pass
-        #     print(recvData.decode())
-            # print("---->", recvData)
-            # raise ValueError
+                # decode('unicode_escape').encode('utf-8')
+            # except:
+            #     pass
+            #     print(recvData.decode())
+                # print("---->", recvData)
+                # raise ValueError
 
-            # print(recvData)
-        # print('상대방 :', recvData.decode('utf-8'))
-        # print('상대방 :', recvData.decode('utf-8'))
+                # print(recvData)
+            # print('상대방 :', recvData.decode('utf-8'))
+            # print('상대방 :', recvData.decode('utf-8'))
 
 
 def Main():
